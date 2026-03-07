@@ -374,7 +374,7 @@ table.lt{width:100%;border-collapse:collapse;background:var(--white);border-radi
 // ══════════════════════════════════════════
 //  CONFIG — Google Sheets sync
 // ══════════════════════════════════════════
-const GS_URL='https://script.google.com/macros/s/AKfycbxTn_Gyekbn3R9xAywIyKNPP9wqtl7sK9VT3YofCKWOvHaKr0CkYrItW6DKb6-7vdYMUQ/exec';
+const GS_URL='https://script.google.com/macros/s/AKfycbx0K4SpsR1NU_OFHcnYkVtit8msZwCrOtB6e_66swXsAB25DlKCdxAjcMK1rZfNGxFRWA/exec';
 const SK='ghd_v4';
 let leads=[];
 let selId=null, curFilter='all', curTab='activity', curView='k';
@@ -421,18 +421,16 @@ async function loadFromSheets(){
   if(selId) renderRpHeader();
 }
 
-// ── Save all leads to Google Sheets ──
+// ── Save all leads to Google Sheets (via GET to avoid CORS) ──
 async function saveToSheets(){
   if(_syncing)return;
   _syncing=true;
   setSyncStatus('saving','Saving…');
   localStorage.setItem(SK,JSON.stringify(leads));
   try{
-    await fetch(GS_URL,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'save_all',leads})
-    });
+    const encoded=encodeURIComponent(JSON.stringify(leads));
+    const url=GS_URL+'?action=save&data='+encoded;
+    await fetch(url);
     setSyncStatus('saved','Saved ✓');
     setTimeout(()=>setSyncStatus('idle','Synced'),2000);
   } catch(e){
