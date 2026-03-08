@@ -431,40 +431,45 @@ async function loadFromSheets(){
   if(selId) renderRpHeader();
 }
 
-// ── Save all leads to Google Sheets ──
+// ── Save all leads to Google Sheets (form POST — bypasses CORS) ──
 async function saveToSheets(){
   if(_syncing)return;
   _syncing=true;
   setSyncStatus('saving','Saving…');
   localStorage.setItem(SK,JSON.stringify(leads));
   try{
-    // Slim down data to avoid URL length limits — activity & flags as compact JSON
     const slim = leads.map(l=>({
       id:l.id, name:l.name||'', phone:l.phone||'', loc:l.loc||'',
       source:l.source||'', type:l.type||'', amount:l.amount||0,
       status:l.status||'', followDate:l.followDate||'', dateAdded:l.dateAdded||'',
       priority:l.priority||'Normal',
       flags:JSON.stringify(l.flags||{}),
-      activity:JSON.stringify((l.activity||[]).slice(-20)) // last 20 activities
+      activity:JSON.stringify((l.activity||[]).slice(-20))
     }));
-    const encoded = encodeURIComponent(JSON.stringify(slim));
-    const url = GS_URL+'?action=save&d='+encoded;
-    // Use image trick to bypass CORS — fires GET request without CORS block
-    const img = new Image();
-    img.src = url;
-    // Also try fetch for confirmation
-    try{
-      const r = await fetch(url);
-      const json = await r.json();
-      if(json.status==='ok'){
-        setSyncStatus('saved','Saved ✓');
-      } else {
-        setSyncStatus('error','Sheet error: '+json.message);
-      }
-    } catch(fe){
-      // fetch blocked by CORS but image trick may have worked
-      setSyncStatus('saved','Saved ✓');
+    // Use form POST via hidden iframe — works from GitHub Pages without CORS error
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = GS_URL;
+    form.target = '_gs_iframe';
+    form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify({action:'save_all', leads: slim});
+    form.appendChild(input);
+    // Create hidden iframe target
+    let iframe = document.getElementById('_gs_iframe');
+    if(!iframe){
+      iframe = document.createElement('iframe');
+      iframe.name = '_gs_iframe';
+      iframe.id = '_gs_iframe';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
     }
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+    setSyncStatus('saved','Saved ✓');
     setTimeout(()=>setSyncStatus('idle','Synced'),2500);
   } catch(e){
     setSyncStatus('error','Save failed');
