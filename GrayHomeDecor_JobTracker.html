@@ -421,22 +421,33 @@ async function loadFromSheets(){
   if(selId) renderRpHeader();
 }
 
-// ── Save all leads to Google Sheets (via GET to avoid CORS) ──
+// ── Save all leads to Google Sheets (no-cors mode) ──
 async function saveToSheets(){
   if(_syncing)return;
   _syncing=true;
   setSyncStatus('saving','Saving…');
   localStorage.setItem(SK,JSON.stringify(leads));
   try{
-    const encoded=encodeURIComponent(JSON.stringify(leads));
-    const url=GS_URL+'?action=save&data='+encoded;
-    await fetch(url);
+    // Split into chunks to avoid URL length limits
+    const chunks = chunkLeads(leads, 10);
+    for(let i=0;i<chunks.length;i++){
+      const encoded=encodeURIComponent(JSON.stringify(
+        i===0 ? {action:'save_all',leads:leads} : {action:'append',leads:chunks[i]}
+      ));
+      await fetch(GS_URL+'?payload='+encoded,{method:'GET',mode:'no-cors'});
+    }
     setSyncStatus('saved','Saved ✓');
     setTimeout(()=>setSyncStatus('idle','Synced'),2000);
   } catch(e){
     setSyncStatus('error','Save failed — check connection');
   }
   _syncing=false;
+}
+
+function chunkLeads(arr,size){
+  const out=[];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out.length?out:[[]];
 }
 
 function safeJson(str,fallback){try{return JSON.parse(str);}catch{return fallback;}}
