@@ -469,6 +469,7 @@ async function saveToSheets(){
     document.body.appendChild(form);
     form.submit();
     form.remove();
+    _lastSave = Date.now();
     setSyncStatus('saved','Saved ✓');
     setTimeout(()=>setSyncStatus('idle','Synced'),2500);
   } catch(e){
@@ -953,8 +954,11 @@ function renderAll(){renderStats();renderKanban();renderList();}
 STATUSES.forEach(s=>{const b=document.getElementById('ln-'+s);if(b)b.innerHTML='<div class="empty" style="color:#aaa;font-style:italic">Loading…</div>';});
 loadFromSheets();
 
-// Auto-refresh every 30 seconds to catch changes from other devices
-setInterval(()=>{if(!document.hidden)loadFromSheets();},30000);
+// Auto-refresh every 30 seconds — but only if no recent local changes
+let _lastSave = 0;
+setInterval(()=>{
+  if(!document.hidden && Date.now() - _lastSave > 35000) loadFromSheets();
+},30000);
 </script>
 </body>
 </html>
