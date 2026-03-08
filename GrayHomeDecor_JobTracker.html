@@ -380,6 +380,7 @@ let leads=[];
 let selId=null, curFilter='all', curTab='activity', curView='k';
 let _actType='call';
 let _syncing=false;
+let _lastSave=0;
 
 // ── Sync status indicator ──
 function setSyncStatus(state,msg){
@@ -393,16 +394,18 @@ function setSyncStatus(state,msg){
 
 // ── Load from Google Sheets ──
 async function loadFromSheets(){
+  // Never load from sheet if we saved recently (within 2 minutes)
+  if(Date.now() - _lastSave < 120000){
+    setSyncStatus('idle','Synced');
+    return;
+  }
   setSyncStatus('loading','Loading…');
-  // Always start with localStorage so nothing disappears
   const local = JSON.parse(localStorage.getItem(SK)||'null');
-  if(local && local.length) { leads=local; renderAll(); }
-  
+  if(local && local.length){ leads=local; renderAll(); }
   try{
     const r = await fetch(GS_URL+'?action=load&t='+Date.now());
     const json = await r.json();
     if(json.status==='ok' && json.data && json.data.length){
-      // Sheet has data — use it
       leads = json.data.map(row=>({
         ...row,
         id: parseInt(row.id)||0,
@@ -414,7 +417,6 @@ async function loadFromSheets(){
       setSyncStatus('saved','Synced ✓');
       renderAll();
     } else if(json.status==='ok' && json.data && json.data.length===0){
-      // Sheet is empty but we have local data — push local to sheet
       if(leads && leads.length){
         setSyncStatus('saving','Uploading to sheet…');
         await saveToSheets();
@@ -954,11 +956,7 @@ function renderAll(){renderStats();renderKanban();renderList();}
 STATUSES.forEach(s=>{const b=document.getElementById('ln-'+s);if(b)b.innerHTML='<div class="empty" style="color:#aaa;font-style:italic">Loading…</div>';});
 loadFromSheets();
 
-// Auto-refresh every 30 seconds — but only if no recent local changes
-let _lastSave = 0;
-setInterval(()=>{
-  if(!document.hidden && Date.now() - _lastSave > 35000) loadFromSheets();
-},30000);
+// Auto-refresh disabled — data saves instantly on every change
 </script>
 </body>
 </html>
