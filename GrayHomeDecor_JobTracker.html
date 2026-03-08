@@ -394,11 +394,16 @@ function setSyncStatus(state,msg){
 // ── Load from Google Sheets ──
 async function loadFromSheets(){
   setSyncStatus('loading','Loading…');
+  // Always start with localStorage so nothing disappears
+  const local = JSON.parse(localStorage.getItem(SK)||'null');
+  if(local && local.length) { leads=local; renderAll(); }
+  
   try{
-    const r=await fetch(GS_URL+'?t='+Date.now());
-    const json=await r.json();
-    if(json.status==='ok'&&json.data&&json.data.length){
-      leads=json.data.map(row=>({
+    const r = await fetch(GS_URL+'?action=load&t='+Date.now());
+    const json = await r.json();
+    if(json.status==='ok' && json.data && json.data.length){
+      // Sheet has data — use it
+      leads = json.data.map(row=>({
         ...row,
         id: parseInt(row.id)||0,
         amount: parseFloat(row.amount)||0,
@@ -407,17 +412,22 @@ async function loadFromSheets(){
       }));
       localStorage.setItem(SK,JSON.stringify(leads));
       setSyncStatus('saved','Synced ✓');
-    } else {
-      // First time — init sheet then use seed
-      leads=JSON.parse(localStorage.getItem(SK)||'null')||seed();
-      await saveToSheets();
+      renderAll();
+    } else if(json.status==='ok' && json.data && json.data.length===0){
+      // Sheet is empty but we have local data — push local to sheet
+      if(leads && leads.length){
+        setSyncStatus('saving','Uploading to sheet…');
+        await saveToSheets();
+      } else {
+        leads = seed();
+        await saveToSheets();
+      }
     }
   } catch(e){
-    // Offline fallback — use localStorage
-    leads=JSON.parse(localStorage.getItem(SK)||'null')||seed();
-    setSyncStatus('error','Offline — local only');
+    leads = local || seed();
+    setSyncStatus('error','Offline — using local data');
+    renderAll();
   }
-  renderAll();
   if(selId) renderRpHeader();
 }
 
